@@ -6,19 +6,26 @@ import useChat from '@/hooks/useChat';
 
 import { E_WssChannel, T_WssChannel } from '../../ws/src/types/ws.types';
 
+const validateHandle = (handle: string): boolean => {
+  // Handle must be 3-16 characters long and contain only letters, numbers, and underscores
+  const regex = /^[a-zA-Z0-9_]{3,16}$/;
+  return regex.test(handle);
+};
+
 export default function MainPage() {
-	const { messages, wsError, connected, sendMessage, connect, disconnect, validateHandle } = useChat();
+	// Updated destructuring to match what useChat actually returns
+	const { messages, error, isConnected, joinChannel, sendMessage, disconnect } = useChat();
 
 	const logEndRef = useRef<HTMLPreElement>(null);
-
 	const [channel, setChannel] = useState<T_WssChannel>('general');
 	const [handle, setHandle] = useState<string>('');
 	const [errors, setErrors] = useState<any>({});
 	const [messageInput, setMessageInput] = useState<string>('');
 
 	useEffect(() => {
-		setErrors((prev: any) => ({ ...prev, connect: wsError }));
-	}, [wsError]);
+		// Use 'error' instead of 'wsError'
+		setErrors((prev: any) => ({ ...prev, connect: error }));
+	}, [error]);
 
 	// Effect to scroll to the bottom of the log
 	useEffect(() => {
@@ -48,7 +55,7 @@ export default function MainPage() {
 	const handleConnect = () => {
 		setErrors({});
 
-		// Validate handle
+		// Validate handle using the local function
 		if (!validateHandle(handle)) {
 			setErrors({
 				handle: 'Handle must be 3-16 characters long and contain only letters, numbers, and underscores',
@@ -64,7 +71,8 @@ export default function MainPage() {
 		}
 
 		try {
-			connect({ channel, handle });
+			// Use 'joinChannel' instead of 'connect'
+			joinChannel(channel, handle);
 		} catch (err: any) {
 			setErrors({ connect: err.message });
 		}
@@ -79,7 +87,8 @@ export default function MainPage() {
 		}
 
 		try {
-			sendMessage(messageInput);
+			// Pass both message and handle to sendMessage
+			sendMessage(messageInput, handle);
 			setMessageInput('');
 		} catch (err: any) {
 			setErrors({ message: err.message });
@@ -129,7 +138,8 @@ export default function MainPage() {
 				</div>
 			</div>
 			<div className="flex items-center gap-6 justify-center w-full">
-				{connected ? (
+				{/* Use 'isConnected' instead of 'connected' */}
+				{isConnected ? (
 					<button className="btn btn-secondary" onClick={disconnect}>
 						Disconnect
 					</button>

@@ -1,24 +1,16 @@
-import WebSocket from 'ws';
-
-import { I_WssResponse, I_WssSend, I_WssChatResponse } from './types/ws.types';
+import { Socket } from 'socket.io';
 
 class WsHelper {
-	public static send<T>(ws: WebSocket, data: I_WssSend<T>, closeConnection = false) {
-		ws.send(JSON.stringify(data));
-		if (closeConnection) ws.close();
-	}
+  static error(socket: Socket, message: string, disconnect = false) {
+    socket.emit('error', { message });
+    if (disconnect) {
+      socket.disconnect();
+    }
+  }
 
-	public static success<T>(ws: WebSocket, data: T, closeConnection = false) {
-		WsHelper.send(ws, { success: true, data }, closeConnection);
-	}
-
-	public static error(ws: WebSocket, message: string, closeConnection = false) {
-		WsHelper.send(ws, { success: false, message }, closeConnection);
-	}
-
-	public static chat(ws: WebSocket, data: I_WssChatResponse) {
-		WsHelper.send(ws, { success: true, data });
-	}
+  static chat(socket: Socket, data: { channel: string; message: string }) {
+    socket.emit('chat-message', data);
+  }
 }
 
 export default WsHelper;

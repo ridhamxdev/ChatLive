@@ -1,171 +1,73 @@
 import { useEffect, useState } from 'react';
+import { io, Socket } from 'socket.io-client';
 
-import {
-	T_WssChannel,
-	E_WssChannel,
-	I_WssChatResponse,
-	I_WssSend,
-	I_WssChatRequest,
-} from '../../ws/src/types/ws.types';
+const useChat = () => {
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [messages, setMessages] = useState<string[]>([]);
+  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-interface I_UseChatReturn {
-	messages: string[];
-	wsError: string;
-	connected: boolean;
-	connect: (props: I_UseChatConnect) => void;
-	disconnect: () => void;
-	sendMessage: (message: string) => void;
-	validateHandle: (handle: string) => boolean;
-}
+  useEffect(() => {
+    const socketIo = io('http://localhost:1337', {
+      autoConnect: false
+    });
 
-interface I_UseChatConnect {
-	channel: T_WssChannel;
-	handle: string;
-}
+    socketIo.on('connect', () => {
+      setIsConnected(true);
+      setError(null);
+    });
 
-export const CHANNELS = Object.keys(E_WssChannel);
-export const HANDLE_REGEX = /^[a-zA-Z0-9_]{3,16}$/;
-export const KEEPALIVE_INTERVAL = 30000; // 30 seconds
+    socketIo.on('disconnect', () => {
+      setIsConnected(false);
+    });
 
-export default function useChat(): I_UseChatReturn {
-	// Validate environment variables
-	const wssUrl = process.env.NEXT_PUBLIC_WSS_URL;
-	if (!wssUrl) {
-		throw new Error('NEXT_PUBLIC_WSS_URL is not defined');
-	}
+    socketIo.on('chat-message', (data: { channel: string; message: string }) => {
+      setMessages(prev => [...prev, data.message]);
+    });
 
-	// State
-	const [messages, setMessages] = useState<string[]>([]);
-	const [ws, setWs] = useState<WebSocket | null>(null);
-	const [wsError, setWsError] = useState<string>('');
-	const [connected, setConnected] = useState<boolean>(false);
-	const [channel, setChannel] = useState<T_WssChannel>('general');
-	const [handle, setHandle] = useState<string>('');
+    socketIo.on('joined-channel', (data: { channel: string; handle: string }) => {
+      console.log(`Successfully joined ${data.channel} as ${data.handle}`);
+    });
 
-	// Methods
-	const connect = (props: I_UseChatConnect) => {
-		const { channel, handle } = props;
+    socketIo.on('error', (data: { message: string }) => {
+      setError(data.message);
+    });
 
-		// Validate that handle and channel are set
-		if (!handle || !HANDLE_REGEX.test(handle)) {
-			throw new Error(`Invalid handle: ${handle}`);
-		}
+    setSocket(socketIo);
 
-		if (!channel || !CHANNELS.includes(channel)) {
-			throw new Error(`Invalid channel: ${channel}`);
-		}
+    return () => {
+      socketIo.disconnect();
+    };
+  }, []);
 
-		setChannel(channel);
-		setHandle(handle);
+  const joinChannel = (channel: string, handle: string) => {
+    if (socket) {
+      socket.connect();
+      socket.emit('join-channel', { channel, handle });
+    }
+  };
 
-		// Set up the WebSocket connection
-		const urlParams = new URLSearchParams();
-		urlParams.append('channel', channel);
-		urlParams.append('handle', handle);
+  const sendMessage = (message: string, handle: string) => {
+    if (socket) {
+      socket.emit('chat-message', { handle, message, type: 'chat' });
+    }
+  };
 
-		const socket = new WebSocket(`${wssUrl}?${urlParams.toString()}`);
-		setWs(socket);
-		setMessages([`Connected to [${E_WssChannel[channel]}] as ${handle}`]);
-	};
+  const disconnect = () => {
+    if (socket) {
+      socket.disconnect();
+    }
+  };
 
-	const disconnect = () => {
-		if (ws?.readyState === WebSocket.OPEN) {
-			ws.close();
-		} else {
-			console.error('WebSocket is not open');
-		}
-	};
+  return {
+    socket,
+    messages,
+    isConnected,
+    error,
+    joinChannel,
+    sendMessage,
+    disconnect
+  };
+};
 
-	const sendMessage = (message: string) => {
-		if (ws?.readyState === WebSocket.OPEN) {
-			const payload: I_WssChatRequest = {
-				type: 'chat',
-				handle,
-				message,
-			};
-			ws.send(JSON.stringify(payload));
-		} else {
-			console.error('WebSocket is not open');
-		}
-	};
-
-	const sendSystemMessage = (message: string) => {
-		if (ws?.readyState === WebSocket.OPEN) {
-			const payload: I_WssChatRequest = {
-				type: 'system',
-				handle,
-				message,
-			};
-			ws.send(JSON.stringify(payload));
-		} else {
-			console.error('WebSocket is not open');
-		}
-	};
-
-	const validateHandle = (handle: string) => {
-		return HANDLE_REGEX.test(handle);
-	};
-
-	// Effects
-	useEffect(() => {
-		if (ws) {
-			ws.onopen = () => {
-				setConnected(true);
-				console.info(`Connected to chat channel: ${channel} as ${handle}`);
-			};
-
-			ws.onmessage = event => {
-				const response = JSON.parse(event.data) as I_WssSend<I_WssChatResponse>;
-				const { success, message, data } = response;
-
-				if (!success || !data) {
-					setWsError(message || 'Unknown error receiving message');
-					return;
-				}
-
-				console.info(`Received message from channel: ${data.channel}`);
-
-				if (data.message) {
-					setMessages(prevMessages => [...prevMessages, data.message.trim()]);
-				}
-			};
-
-			ws.onclose = () => {
-				setConnected(false);
-				setMessages([`Disconnected from [${E_WssChannel[channel]}]`]);
-				setChannel('general');
-				setHandle('');
-				console.info('Disconnected from chat channel');
-			};
-
-			ws.onerror = error => {
-				setConnected(false);
-				setWsError('Error connecting to chat channel');
-				console.error('WebSocket error:', error);
-			};
-
-			// Keep the connection alive
-			const keepAliveInterval = setInterval(() => {
-				if (ws.readyState === WebSocket.OPEN) {
-					sendSystemMessage('keepalive');
-				}
-			}, KEEPALIVE_INTERVAL);
-
-			return () => {
-				ws.close();
-				clearInterval(keepAliveInterval);
-				setConnected(false);
-			};
-		}
-	}, [ws]);
-
-	return {
-		messages,
-		wsError,
-		connected,
-		connect,
-		disconnect,
-		sendMessage,
-		validateHandle,
-	};
-}
+export default useChat;

@@ -377,7 +377,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Built with ❤️ using Next.js and Socket.IO
 
-For questions, issues, or contributions, please visit our [GitHub repository](https://github.com/designly1/nextjs-chatapp-example).
+For questions, issues, or contributions, please visit our [GitHub repository](https://github.com/ridhamxdev).
 
 
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from "react";
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
@@ -10,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 
-export default function RegisterPage() {
+function RegisterPageInner() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [handle, setHandle] = useState('');
@@ -172,5 +173,13 @@ export default function RegisterPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function RegisterPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <RegisterPageInner />
+    </Suspense>
   );
 }

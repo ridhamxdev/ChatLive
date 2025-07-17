@@ -1,179 +1,54 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-import useChat from '@/hooks/useChat';
+export default function HomePage() {
+  const { status } = useSession();
+  const router = useRouter();
 
-import { E_WssChannel, T_WssChannel } from '../../ws/src/types/ws.types';
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.push('/dashboard/chat');
+    }
+  }, [status, router]);
 
-const validateHandle = (handle: string): boolean => {
-  // Handle must be 3-16 characters long and contain only letters, numbers, and underscores
-  const regex = /^[a-zA-Z0-9_]{3,16}$/;
-  return regex.test(handle);
-};
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-lg">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
-export default function MainPage() {
-	// Updated destructuring to match what useChat actually returns
-	const { messages, error, isConnected, joinChannel, sendMessage, disconnect } = useChat();
-
-	const logEndRef = useRef<HTMLPreElement>(null);
-	const [channel, setChannel] = useState<T_WssChannel>('general');
-	const [handle, setHandle] = useState<string>('');
-	const [errors, setErrors] = useState<any>({});
-	const [messageInput, setMessageInput] = useState<string>('');
-
-	useEffect(() => {
-		// Use 'error' instead of 'wsError'
-		setErrors((prev: any) => ({ ...prev, connect: error }));
-	}, [error]);
-
-	// Effect to scroll to the bottom of the log
-	useEffect(() => {
-		if (logEndRef.current) {
-			logEndRef.current.scrollTop = logEndRef.current.scrollHeight;
-		}
-	}, [messages]);
-
-	const handleChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
-		setErrors({});
-
-		const name = e.target.name;
-		const value = e.target.value;
-
-		if (name === 'channel') {
-			setChannel(value as T_WssChannel);
-		} else if (name === 'handle') {
-			// Format handle and uppercase first letter
-			const modifiedHandle = value
-				.replace(/[^a-zA-Z0-9_]/g, '')
-				.toLowerCase()
-				.replace(/^[a-z]/, c => c.toUpperCase());
-			setHandle(modifiedHandle);
-		}
-	};
-
-	const handleConnect = () => {
-		setErrors({});
-
-		// Validate handle using the local function
-		if (!validateHandle(handle)) {
-			setErrors({
-				handle: 'Handle must be 3-16 characters long and contain only letters, numbers, and underscores',
-			});
-			return;
-		}
-
-		// Validate channel
-		const channels = Object.keys(E_WssChannel);
-		if (!channels.includes(channel)) {
-			setErrors({ channel: 'Invalid channel' });
-			return;
-		}
-
-		try {
-			// Use 'joinChannel' instead of 'connect'
-			joinChannel(channel, handle);
-		} catch (err: any) {
-			setErrors({ connect: err.message });
-		}
-	};
-
-	const handleSendMessage = () => {
-		setErrors({});
-
-		if (!messageInput) {
-			setErrors({ message: 'Message cannot be empty' });
-			return;
-		}
-
-		try {
-			// Pass both message and handle to sendMessage
-			sendMessage(messageInput, handle);
-			setMessageInput('');
-		} catch (err: any) {
-			setErrors({ message: err.message });
-		}
-	};
-
-	return (
-		<div className="w-full max-w-5xl flex flex-col gap-6 mx-auto border-2 rounded-xl p-6">
-			<div className="grid grid-cols-2 gap-4">
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">Channel</span>
-					</label>
-					<select
-						className="select select-bordered w-full"
-						name="channel"
-						value={channel}
-						onChange={handleChange}
-					>
-						{Object.keys(E_WssChannel).map(channel => {
-							const channelKey = channel as T_WssChannel;
-							return (
-								<option key={channelKey} value={channelKey}>
-									{E_WssChannel[channelKey]}
-								</option>
-							);
-						})}
-					</select>
-					<label className="label">
-						<span className="label-text-alt text-error">{errors.channel || ' '}</span>
-					</label>
-				</div>
-				<div className="form-control">
-					<label className="label">
-						<span className="label-text">Handle</span>
-					</label>
-					<input
-						type="text"
-						className="input input-bordered w-full"
-						name="handle"
-						value={handle}
-						onChange={handleChange}
-					/>
-					<label className="label">
-						<span className="label-text-alt text-error">{errors.handle || ' '}</span>
-					</label>
-				</div>
-			</div>
-			<div className="flex items-center gap-6 justify-center w-full">
-				{/* Use 'isConnected' instead of 'connected' */}
-				{isConnected ? (
-					<button className="btn btn-secondary" onClick={disconnect}>
-						Disconnect
-					</button>
-				) : (
-					<button className="btn btn-primary" onClick={handleConnect}>
-						Connect
-					</button>
-				)}
-			</div>
-			<div className="w-full text-center text-sm text-error">{errors.connect || ' '}</div>
-			<pre
-				className="bg-zinc-950 text-green-500 p-6 rounded-xl h-80 overflow-y-auto"
-				ref={logEndRef}
-				style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-			>
-				{messages.join('\n') || 'No messages'}
-			</pre>
-			<div className="form-control">
-				<textarea
-					className="textarea textarea-bordered w-full"
-					value={messageInput}
-					onChange={e => setMessageInput(e.target.value)}
-					onKeyDown={e => {
-						if (e.key === 'Enter' && !e.shiftKey) {
-							e.preventDefault();
-							handleSendMessage();
-						}
-					}}
-					placeholder="Type a message..."
-				/>
-				<label className="label">
-					<span className="label-text-alt text-error">{errors.message || ' '}</span>
-				</label>
-			</div>
-		</div>
-	);
-}
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-3xl font-bold">Welcome to ChatApp</CardTitle>
+          <CardDescription className="text-lg">
+            A real-time chat application built with Next.js
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button 
+            onClick={() => router.push('/auth/login')} 
+            className="w-full"
+            size="lg"
+          >
+            Get Started
+          </Button>
+          <div className="text-center text-sm text-gray-600 dark:text-gray-400">
+            Join the conversation today!
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+} 

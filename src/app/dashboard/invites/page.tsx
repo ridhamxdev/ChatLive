@@ -9,29 +9,22 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Mail, Check, X, Clock } from 'lucide-react';
-
-interface Invitation {
-  _id: string;
-  email: string;
-  accepted: boolean;
-  expiresAt: string;
-  createdAt: string;
-}
+import { InvitationResponse } from '@/types/invitation';
 
 export default function InvitesPage() {
   const { data: session } = useSession();
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [loadingInvitations, setLoadingInvitations] = useState(true);
+  const [email, setEmail] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [message, setMessage] = useState<string>('');
+  const [error, setError] = useState<string>('');
+  const [invitations, setInvitations] = useState<InvitationResponse[]>([]);
+  const [loadingInvitations, setLoadingInvitations] = useState<boolean>(true);
 
   useEffect(() => {
     fetchInvitations();
   }, []);
 
-  const fetchInvitations = async () => {
+  const fetchInvitations = async (): Promise<void> => {
     try {
       const response = await fetch('/api/invite/list');
       if (response.ok) {
@@ -45,7 +38,7 @@ export default function InvitesPage() {
     }
   };
 
-  const handleSendInvite = async (e: React.FormEvent) => {
+  const handleSendInvite = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
     if (!email.trim()) {
@@ -69,7 +62,7 @@ export default function InvitesPage() {
       if (response.ok) {
         setMessage('Invitation sent successfully!');
         setEmail('');
-        fetchInvitations(); // Refresh the list
+        fetchInvitations();
       } else {
         setError(data.error || 'Failed to send invitation');
       }
@@ -80,7 +73,7 @@ export default function InvitesPage() {
     }
   };
 
-  const getStatusBadge = (invitation: Invitation) => {
+  const getStatusBadge = (invitation: InvitationResponse): JSX.Element => {
     if (invitation.accepted) {
       return (
         <Badge variant="default" className="bg-green-100 text-green-800">
@@ -108,7 +101,7 @@ export default function InvitesPage() {
     );
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -128,7 +121,6 @@ export default function InvitesPage() {
       </div>
 
       <div className="grid gap-6">
-        {/* Send Invitation Form */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -174,7 +166,6 @@ export default function InvitesPage() {
           </CardContent>
         </Card>
 
-        {/* Invitations List */}
         <Card>
           <CardHeader>
             <CardTitle>Sent Invitations</CardTitle>

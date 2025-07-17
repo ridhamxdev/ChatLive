@@ -1,23 +1,55 @@
-import { NextResponse } from "next/server";
-import { sendMail } from "@/lib/mailer";
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
+import { createInvitation, findInvitationByEmail } from '@/lib/database';
+import { sendInvitationEmail } from '@/lib/emailService';
 
-export async function POST(request: Request) {
+interface InviteRequest {
+  email: string;
+  chatRoomId?: string;
+  role?: 'member' | 'admin' | 'moderator';
+}
+
+export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json();
-    if (!email || typeof email !== "string" || !email.includes("@")) {
-      return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Send invitation email
-    await sendMail({
-      to: email,
-      subject: "You're invited to join the Chat App!",
-      text: "Click the link to join our chat app.",
-      html: "<b>Click the link to join our chat app.</b>",
+    const { email, chatRoomId, role }: InviteRequest = await request.json();
+    
+    if (!email || !email.includes('@')) {
+      return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
+    }
+
+    const existingInvitation = await findInvitationByEmail(email);
+    if (existingInvitation) {
+      return NextResponse.json({ error: 'Invitation already sent to this email' }, { status: 400 });
+    }
+
+    const invitation = await createInvitation({
+      email,
+      invitedBy: session.user.id,
+      chatRoomId,
+      role: role || 'member'
     });
 
-    return NextResponse.json({ message: "Invitation sent!" }, { status: 200 });
+    await sendInvitationEmail(email, invitation.token, session.user.name || session.user.email || 'Someone');
+
+    return NextResponse.json({ 
+      message: 'Invitation sent successfully!',
+      invitation: {
+        _id: invitation._id,
+        email: invitation.email,
+        createdAt: invitation.createdAt,
+        expiresAt: invitation.expiresAt
+      }
+    });
+
   } catch (error) {
-    return NextResponse.json({ error: "Failed to process invitation." }, { status: 500 });
+    console.error('Error sending invitation:', error);
+    return NextResponse.json({ error: 'Failed to send invitation' }, { status: 500 });
   }
-} 
+}

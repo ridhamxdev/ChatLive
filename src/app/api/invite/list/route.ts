@@ -2,29 +2,32 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import clientPromise from '@/lib/mongodb';
+import { getInvitations } from '@/lib/database';
+import { InvitationResponse } from '@/types/invitation';
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const db = await clientPromise;
-    const invitations = await db.db().collection('invitations').find({ 
-      invitedBy: session.user?.email 
-    }).sort({ createdAt: -1 }).toArray();
+    const invitations = await getInvitations(session.user.id);
+    
+    const formattedInvitations: InvitationResponse[] = invitations.map(invitation => ({
+      _id: invitation._id?.toString() || '',
+      email: invitation.email,
+      accepted: invitation.accepted,
+      expiresAt: invitation.expiresAt.toISOString(),
+      createdAt: invitation.createdAt.toISOString(),
+      chatRoomId: invitation.chatRoomId,
+      role: invitation.role
+    }));
 
-    console.log(invitations);
-
-    return NextResponse.json({ invitations });
+    return NextResponse.json({ invitations: formattedInvitations });
   } catch (error) {
-    console.error("Error fetching invitations:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    console.error('Error fetching invitations:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
